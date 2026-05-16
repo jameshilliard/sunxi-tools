@@ -70,19 +70,17 @@ static void usb_error(int rc, const char *caption, int exitcode)
  * timeout, and "slow" transfers take place at approx. 64 KiB/sec - so we can
  * expect the maximum chunk being transmitted within 8 seconds or less.
  */
-static const int AW_USB_MAX_BULK_SEND = 512 * 1024; /* 512 KiB per bulk request */
+static const int AW_USB_MAX_BULK_SEND = 512 * 1024;
+static const int AW_USB_PROGRESS_BULK_SEND = 128 * 1024;
+static const int AW_USB_FAST_PROGRESS_BULK_SEND = 1024 * 1024;
 
+/*
+ * Keep progress updates frequent enough for slow BROM PIO transfers. Once an
+ * RX-DMA thunk is installed, 1 MiB chunks avoid host-side progress overhead.
+ */
 static void usb_bulk_send(libusb_device_handle *usb, int ep, const void *data,
-			  size_t length, bool progress)
+			  size_t length, size_t max_chunk, bool progress)
 {
-	/*
-	 * With no progress notifications, we'll use the maximum chunk size.
-	 * Otherwise, it's useful to lower the size (have more chunks) to get
-	 * more frequent status updates. 128 KiB per request seem suitable.
-	 * (Worst case of "slow" transfers -> one update every two seconds.)
-	 */
-	size_t max_chunk = progress ? 128 * 1024 : AW_USB_MAX_BULK_SEND;
-
 	size_t chunk;
 	int rc, sent;
 	while (length > 0) {
@@ -187,7 +185,7 @@ static void aw_send_usb_request(feldev_handle *dev, int type, int length)
 	};
 	req.length2 = req.length;
 	usb_bulk_send(dev->usb->handle, dev->usb->endpoint_out,
-		      &req, sizeof(req), false);
+		      &req, sizeof(req), AW_USB_MAX_BULK_SEND, false);
 }
 
 static bool aw_send_usb_request_may_disconnect(feldev_handle *dev, int type,
@@ -239,9 +237,18 @@ static bool aw_usb_read_may_disconnect(feldev_handle *dev, void *data,
 static void aw_usb_write(feldev_handle *dev, const void *data, size_t len,
 			 bool progress)
 {
+	size_t max_chunk = AW_USB_MAX_BULK_SEND;
+
+	if (progress) {
+		if (dev->rx_dma_patched)
+			max_chunk = AW_USB_FAST_PROGRESS_BULK_SEND;
+		else
+			max_chunk = AW_USB_PROGRESS_BULK_SEND;
+	}
+
 	aw_send_usb_request(dev, AW_USB_WRITE, len);
 	usb_bulk_send(dev->usb->handle, dev->usb->endpoint_out,
-		      data, len, progress);
+		      data, len, max_chunk, progress);
 	aw_read_usb_response(dev);
 }
 

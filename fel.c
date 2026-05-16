@@ -37,6 +37,7 @@ static uint32_t uboot_entry = 0; /* entry point (address) of U-Boot */
 static uint32_t uboot_size  = 0; /* size of U-Boot binary */
 static bool enter_in_aarch64 = false;
 static bool fel_usb_high_speed_enabled = false;
+static bool fel_dram_ready = false;
 
 #define FEL_REENUM_TIMEOUT_MS		5000
 #define FEL_REENUM_RETRY_MS		100
@@ -108,6 +109,12 @@ typedef struct image_header {
 #define FEL_BULK_ENDPOINT_OFFSET	0x10
 
 #define SID_STR_SIZE		36
+
+#define	DRAM_BASE		0x40000000
+#define	DRAM_SIZE		0x80000000
+#define	DRAM_END		(DRAM_BASE + DRAM_SIZE)
+
+static void aw_fel_install_rx_dma_thunk(feldev_handle *dev);
 
 static uint32_t get_le32(const void *ptr)
 {
@@ -183,6 +190,10 @@ double aw_write_buffer(feldev_handle *dev, void *buf, uint32_t offset,
 			 uboot_entry, uboot_entry + uboot_size);
 
 	double start = gettime();
+
+	if (fel_usb_high_speed_enabled && fel_dram_ready &&
+	    offset >= DRAM_BASE && offset < DRAM_END)
+		aw_fel_install_rx_dma_thunk(dev);
 
 	aw_fel_write_buffer(dev, buf, offset, len, progress);
 	return gettime() - start;
@@ -410,8 +421,9 @@ static uint32_t fel_to_secure_svc_return_thunk[] = {
 	#include "thunks/fel-to-secure-svc-return-thunk.h"
 };
 
-#define	DRAM_BASE		0x40000000
-#define	DRAM_SIZE		0x80000000
+static uint32_t fel_rx_dma_thunk[] = {
+	#include "thunks/fel-rx-dma-thunk.h"
+};
 
 uint32_t aw_read_arm_cp_reg(feldev_handle *dev, soc_info_t *soc_info,
 			    uint32_t coproc, uint32_t opc1, uint32_t crn,
@@ -465,6 +477,40 @@ uint32_t fel_readl(feldev_handle *dev, uint32_t addr)
 void fel_writel(feldev_handle *dev, uint32_t addr, uint32_t val)
 {
 	fel_writel_n(dev, addr, &val, 1);
+}
+
+static void aw_fel_install_rx_dma_thunk(feldev_handle *dev)
+{
+	const fel_rx_dma_info *dma = &dev->soc_info->fel_rx_dma;
+	uint32_t params[6], param_offset;
+	size_t i;
+
+	if (dev->rx_dma_patched || !dma->thunk_addr)
+		return;
+
+	param_offset = fel_rx_dma_thunk[1];
+	if (param_offset % sizeof(*fel_rx_dma_thunk) ||
+	    param_offset + sizeof(params) > sizeof(fel_rx_dma_thunk))
+		pr_fatal("RX DMA thunk: bad parameter offset 0x%x\n",
+			 param_offset);
+
+	uint32_t thunk_buf[ARRAY_SIZE(fel_rx_dma_thunk)];
+
+	pr_info("Patching BROM RX FIFO copy to use DMA.\n");
+	for (i = 0; i < sizeof(thunk_buf) / sizeof(*thunk_buf); i++)
+		thunk_buf[i] = htole32(fel_rx_dma_thunk[i]);
+	params[0] = htole32(dma->l1_tt_addr);
+	params[1] = htole32(dma->l2_tt_addr);
+	params[2] = htole32(dma->brom_hook_addr);
+	params[3] = htole32(dma->brom_hook_shadow_addr);
+	params[4] = htole32(dev->soc_info->usb_musb_base);
+	params[5] = htole32(dma->dma_max_len);
+	memcpy((uint8_t *)thunk_buf + param_offset, params, sizeof(params));
+
+	aw_fel_write(dev, thunk_buf, dma->thunk_addr, sizeof(thunk_buf));
+
+	aw_fel_execute(dev, dma->thunk_addr + fel_rx_dma_thunk[0]);
+	dev->rx_dma_patched = true;
 }
 
 static bool aw_fel_switch_usb_high_speed(feldev_handle *dev)
@@ -945,7 +991,7 @@ void aw_restore_and_enable_mmu(feldev_handle *dev,
 	};
 
 	pr_info("Setting write-combine mapping for DRAM.\n");
-	for (i = (DRAM_BASE >> 20); i < ((DRAM_BASE + DRAM_SIZE) >> 20); i++) {
+	for (i = (DRAM_BASE >> 20); i < (DRAM_END >> 20); i++) {
 		/* Clear TEXCB bits */
 		tt[i] &= ~((7 << 12) | (1 << 3) | (1 << 2));
 		/* Set TEXCB to 00100 (Normal uncached mapping) */
@@ -1112,6 +1158,7 @@ uint32_t aw_fel_write_and_execute_spl(feldev_handle *dev, uint8_t *buf, size_t l
 	/* re-enable the MMU if it was enabled by BROM */
 	if (tt != NULL)
 		aw_restore_and_enable_mmu(dev, soc_info, tt);
+	fel_dram_ready = true;
 
 	return spl_len;
 }
@@ -1644,7 +1691,7 @@ void usage(const char *cmd) {
 		"	-h, --help			Print this usage summary and exit\n"
 		"	-v, --verbose			Verbose logging\n"
 		"	-p, --progress			\"write\" transfers show a progress bar\n"
-		"	    --no-high-speed		Disable high-speed USB\n"
+		"	    --no-high-speed		Disable high-speed USB and fast writes\n"
 		"	-l, --list			Enumerate all (USB) FEL devices and exit\n"
 		"	-d, --dev bus:devnum		Use specific USB bus and device number\n"
 		"	    --sid SID			Select device by SID key (exact match)\n"

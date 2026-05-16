@@ -35,6 +35,7 @@ typedef struct {
 	soc_name_t soc_name;
 	soc_info_t *soc_info;
 	bool disconnected;
+	bool rx_dma_patched;
 } feldev_handle;
 
 /* list_fel_devices() will return an array of this type */
