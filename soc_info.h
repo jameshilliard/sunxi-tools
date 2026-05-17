@@ -108,16 +108,28 @@ typedef struct {
  *   be accessible from non-secure world.
  * - No RMR trigger on ARMv8 cores to bring the core into AArch64.
  * On older SoCs, a simple "smc" call returns with the NS bit cleared,
- * so access to all secure peripherals is suddenly possible.
+ * so access to all secure peripherals is suddenly possible. Newer SoCs
+ * may also need CPU and GIC state fixups before returning to FEL in
+ * secure SVC.
  * The 'smc_workaround_probe_addr' field selects a restricted word that
  * reads as zero in non-secure state and non-zero in secure state. A zero
  * address disables the probe.
+ * The 'secure_boot_status_offset' field can be used when the SoC has
+ * a readable secure boot status register at sid_base + offset. It is a
+ * gate only; a separate runtime state probe is still required to avoid
+ * applying the workaround on every invocation.
  * The 'smc_workaround' field selects how to apply the workaround once the
  * runtime checks say that it is needed.
  */
 typedef enum {
 	SMC_WORKAROUND_DIRECT_SMC,
+	SMC_WORKAROUND_SECURE_SVC,
 } smc_workaround_t;
+
+typedef struct {
+	uint32_t monitor_vector_addr;
+	uint32_t gicc_base;
+} secure_svc_smc_info;
 
 typedef struct {
 	uint32_t           soc_id;       /* ID of the SoC */
@@ -140,8 +152,11 @@ typedef struct {
 	bool               icache_fix;
 	/* Probe address, or 0 to disable; a zero read needs the SMC workaround */
 	uint32_t           smc_workaround_probe_addr;
+	/* Require non-zero secure boot status at sid_base + offset */
+	uint32_t           secure_boot_status_offset;
 	/* How to apply the SMC workaround */
 	smc_workaround_t   smc_workaround;
+	const secure_svc_smc_info *secure_svc_smc;
 	uint32_t           sram_size;	/* Usable contiguous SRAM at spl_addr */
 	sram_swap_buffers *swap_buffers;
 } soc_info_t;
