@@ -108,15 +108,21 @@ typedef struct {
  *   be accessible from non-secure world.
  * - No RMR trigger on ARMv8 cores to bring the core into AArch64.
  * On older SoCs, a simple "smc" call returns with the NS bit cleared,
- * so access to all secure peripherals is suddenly possible.
+ * so access to all secure peripherals is suddenly possible. Newer SoCs
+ * may need a secure-SVC thunk to handle the monitor-to-SVC transition
+ * after the SMC call before returning to FEL.
  * The 'needs_smc_workaround_if_zero_word_at_addr' field can be used to
  * have a check for this condition (reading from restricted addresses
  * typically returns zero) and then activate the SMC workaround if needed.
+ * The 'secure_boot_fuse_addr' and 'secure_boot_fuse_mask' fields can be used
+ * when the SoC has an explicit readable secure boot status word. If both
+ * checks are configured, then both conditions must match.
  * The 'smc_workaround' field selects how to apply the workaround once the
  * runtime checks say that it is needed.
  */
 typedef enum {
 	SMC_WORKAROUND_DIRECT_SMC,
+	SMC_WORKAROUND_SECURE_SVC_THUNK,
 } smc_workaround_t;
 
 typedef struct {
@@ -140,6 +146,9 @@ typedef struct {
 	bool               icache_fix;
 	/* Use SMC workaround (enter secure mode) if can't read from this address */
 	uint32_t           needs_smc_workaround_if_zero_word_at_addr;
+	/* Use SMC workaround if any of these secure boot fuse bits are set */
+	uint32_t           secure_boot_fuse_addr;
+	uint32_t           secure_boot_fuse_mask;
 	/* How to apply the SMC workaround */
 	smc_workaround_t   smc_workaround;
 	uint32_t           sram_size;	/* Usable contiguous SRAM at spl_addr */

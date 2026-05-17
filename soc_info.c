@@ -565,6 +565,10 @@ soc_info_t soc_info_table[] = {
 		.rvbar_reg    = 0x09010040,
 		.rvbar_reg_alt= 0x08100040,
 		.ver_reg      = 0x03000024,
+		.needs_smc_workaround_if_zero_word_at_addr = 0x03006240,
+		.secure_boot_fuse_addr = 0x030060a0,
+		.secure_boot_fuse_mask = 0xf,
+		.smc_workaround = SMC_WORKAROUND_SECURE_SVC_THUNK,
 		.watchdog     = &wd_h6_compat,
 	},{
 		.soc_id       = 0x1851, /* Allwinner R329 */
