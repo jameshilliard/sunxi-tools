@@ -396,7 +396,8 @@ soc_info_t soc_info_table[] = {
 		.sid_sections = h3_sid_maps,
 		.rvbar_reg    = 0x017000A0,
 		/* Check L.NOP in the OpenRISC reset vector */
-		.needs_smc_workaround_if_zero_word_at_addr = 0x40004,
+		.smc_workaround_probe_addr = 0x40004,
+		.smc_workaround = SMC_WORKAROUND_DIRECT_SMC,
 		.watchdog     = &wd_h3_compat,
 	},{
 		.soc_id       = 0x1639, /* Allwinner A80 */
@@ -444,7 +445,8 @@ soc_info_t soc_info_table[] = {
 		.sid_fix      = true,
 		.sid_sections = h3_sid_maps,
 		/* Check L.NOP in the OpenRISC reset vector */
-		.needs_smc_workaround_if_zero_word_at_addr = 0x40004,
+		.smc_workaround_probe_addr = 0x40004,
+		.smc_workaround = SMC_WORKAROUND_DIRECT_SMC,
 		.watchdog     = &wd_h3_compat,
 	},{
 		.soc_id       = 0x1681, /* Allwinner V3s */
@@ -482,7 +484,8 @@ soc_info_t soc_info_table[] = {
 		.sid_sections = h3_sid_maps,
 		.rvbar_reg    = 0x017000A0,
 		/* Check L.NOP in the OpenRISC reset vector */
-		.needs_smc_workaround_if_zero_word_at_addr = 0x40004,
+		.smc_workaround_probe_addr = 0x40004,
+		.smc_workaround = SMC_WORKAROUND_DIRECT_SMC,
 		.watchdog     = &wd_h3_compat,
 	},{
 		.soc_id       = 0x1701, /* Allwinner R40 */
@@ -521,7 +524,8 @@ soc_info_t soc_info_table[] = {
 		.sid_sections = h6_sid_maps,
 		.rvbar_reg    = 0x09010040,
 		/* Check L.NOP in the OpenRISC reset vector */
-		.needs_smc_workaround_if_zero_word_at_addr = 0x100004,
+		.smc_workaround_probe_addr = 0x100004,
+		.smc_workaround = SMC_WORKAROUND_DIRECT_SMC,
 		.watchdog     = &wd_h6_compat,
 	},{
 		.soc_id       = 0x1816, /* Allwinner V536 */
@@ -640,7 +644,8 @@ soc_info_t soc_info_table[] = {
 		.sid_offset   = 0x200,
 		.sid_sections = generic_2k_sid_maps,
 		.rvbar_reg    = 0x08100040,
-		.needs_smc_workaround_if_zero_word_at_addr = 0x100004,
+		.smc_workaround_probe_addr = 0x100004,
+		.smc_workaround = SMC_WORKAROUND_DIRECT_SMC,
 		.watchdog     = &wd_h6_compat,
 	},{
 		.swap_buffers = NULL /* End of the table */
